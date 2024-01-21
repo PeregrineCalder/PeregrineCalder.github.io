@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search>
+  <entry>
+    <title>RPC</title>
+    <url>/2024/01/19/RPC/</url>
+    <content><![CDATA[]]></content>
+  </entry>
+  <entry>
+    <title>Raft Algorithm</title>
+    <url>/2024/01/19/Raft-Algorithm/</url>
+    <content><![CDATA[<h1 id="CAP-theorem"><a href="#CAP-theorem" class="headerlink" title="CAP theorem"></a>CAP theorem</h1><ul>
+<li><p>Consistency: Every read receives the most recent write or an error.</p>
+</li>
+<li><p>Availability: Every request receives a (non-error) response, without guaranteeing it contains the most recent write.</p>
+</li>
+<li><p>Partition Tolerance: The system continues to operate despite an arbitrary number of messages being dropped (or delayed) by the network between nodes.</p>
+</li>
+</ul>
+<p><img  
+                     lazyload
+                     src="/images/loading.svg"
+                     data-src="/../img/Raft-Algorithm/CAPTheoremDiagram.png"
+                      alt="CAPTheoremDiagram"
+                ></p>
+]]></content>
+      <categories>
+        <category>Distributed Systems</category>
+      </categories>
+      <tags>
+        <tag>Distributed Systems</tag>
+      </tags>
+  </entry>
+</search>
