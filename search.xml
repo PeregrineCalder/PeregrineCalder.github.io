@@ -1,35 +1,158 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>Distributed Systems - Theoretical Foundations</title>
-    <url>/2024/01/19/Distributed_Systems_Theoretical_Foundations/</url>
+    <title>一致性 Hash 算法</title>
+    <url>/2024/01/23/%E4%B8%80%E8%87%B4%E6%80%A7-Hash-%E7%AE%97%E6%B3%95/</url>
+    <content><![CDATA[<h2 id="传统-Hash-算法"><a href="#传统-Hash-算法" class="headerlink" title="传统 Hash 算法"></a>传统 Hash 算法</h2><h3 id="分布式缓存应用场景"><a href="#分布式缓存应用场景" class="headerlink" title="分布式缓存应用场景"></a>分布式缓存应用场景</h3><p>以缓存大量图片文件为例，可以采用 Hash 算法确保这些图片尽可能均匀分布在 N 台机器上。具体而言，可以通过 Hash 算法计算出文件的键值 Key，然后通过取模运算 (Key % N) 得到余数，从而确定缓存数据所在的机器编号 (Hash(object) % N)。由于同一 Hash 算法对同一对象计算会得到相同的键值，所以在后续查找过程中，只需通过 Hash 计算和取模计算即可找到文件存放的机器位置。</p>
+<h3 id="传统-Hash-算法的缺陷"><a href="#传统-Hash-算法的缺陷" class="headerlink" title="传统 Hash 算法的缺陷"></a>传统 Hash 算法的缺陷</h3><p>在分布式集群中，对机器进行添加、删除或在发生故障时自动脱离集群，是分布式集群管理的基本功能。当有机器添加或删除时，机器总数 N 改变，导致取模运算得到的余数改变，即错误地得到文件存放的机器位置，这导致无法正常访问很多原有的缓存数据。当程序在缓存中无法获取数据时，就会向后端服务器请求数据，从而导致大量缓存在同一时间失效，引发缓存雪崩现象。缓存集群无法承担访问压力，压力最终会转移到后端服务器，这可能导致整个系统崩溃。一致性 Hash 算法的设计目的就是为了解决这一问题。</p>
+<h2 id="一致性-Hash-算法简介"><a href="#一致性-Hash-算法简介" class="headerlink" title="一致性 Hash 算法简介"></a>一致性 Hash 算法简介</h2><p>一致性 Hash 算法提出了在动态变化的 Cache 环境中，判定哈希算法优劣的四个原则</p>
+<ul>
+<li><strong>平衡性 (Balance):</strong> 指 Hash 计算的结果能够尽可能分布到所有缓存中去，充分利用所有缓冲空间。</li>
+<li><strong>单调性 (Monotonicity):</strong> 指如果已经有一些内容通过哈希分派到了相应的缓冲中，又有新的缓冲加入到系统中。哈希的结果应能够保证原有已分配的内容可以被映射到原有的或者新的缓冲中去，而不会被映射到旧的缓冲集合中的其他缓冲区。</li>
+<li><strong>分散性 (Spread):</strong> 在分布式环境中，不同终端所见的缓存范围可能不同，这会导致不同终端将相同内容映射到缓存上时，Hash 计算结果不一致，最终导致相同内容被不同终端映射到不同缓存区中，从而降低了系统存储的效率。分散性的定义就是上述情况发生的严重程度。</li>
+<li><strong>负载 (Load):</strong> 不同终端可能将相同内容映射到不同缓冲区中，那么对于一个特定的缓冲区而言，也可能被不同终端映射不同内容。</li>
+</ul>
+<h2 id="一致性-Hash-算法实现"><a href="#一致性-Hash-算法实现" class="headerlink" title="一致性 Hash 算法实现"></a>一致性 Hash 算法实现</h2><h3 id="Hash-环"><a href="#Hash-环" class="headerlink" title="Hash 环"></a>Hash 环</h3><ol>
+<li>通过 Hash 计算将文件和 Cache 服务器映射到 [0, 2^32) 的数字空间中（假设这是一个首尾连接的环形空间） 
+  <div class="note p-4 mb-4 rounded-small default icon-padding">
+    <i class="note-icon fa-solid fa-info"></i><p>一般根据机器的 IP 地址或者唯一的计算机别名进行 Hash 计算</p>
+
+  </div>
+ 
+  <div class="note-large default">
+    <div class="notel-title rounded-t-lg p-3 font-bold text-lg flex flex-row gap-2 items-center">
+      <i class="notel-icon fa-solid fa-question"></i><p>为什么一致性 Hash 空间的数据范围是 [0, 2^32)</p>
+
+    </div>
+    <div class="notel-content">
+      <p>这个问题有两种答案，一是技术限制、一是实际场景：</p>
+<ol>
+<li>Java 中 int 的最大值是 2^31 - 1，最小值是 -2^31，2^32 刚好是无符号整型的最大值</li>
+<li>一致性 Hash 算法用于服务器的负载均衡，而服务器的 IP 地址是 32 位</li>
+</ol>
+
+    </div>
+  </div></li>
+</ol>
+<p><img lazyload="" src="/images/loading.svg" data-src="/../img/DistributedSystems/%E4%B8%80%E8%87%B4%E6%80%A7-Hash-%E7%AE%97%E6%B3%95/hashCircle.png" alt="hashcircle"></p>
+<ol start="2">
+<li><p>在环形 Hash 空间中，顺时针查找距离文件最近的机器节点，并将数据存储到对应的 Cache 服务器上， 如上图所示，F1 存储到 C1 服务器上，F2 存储到 C2 服务器上， F3、F4 存储在 C3 服务器上</p>
+<p><img lazyload="" src="/images/loading.svg" data-src="/../img/DistributedSystems/%E4%B8%80%E8%87%B4%E6%80%A7-Hash-%E7%AE%97%E6%B3%95/hashCircle2.png" alt="hashcircle"></p>
+</li>
+</ol>
+<h3 id="删除节点"><a href="#删除节点" class="headerlink" title="删除节点"></a>删除节点</h3><p>假设 C1 服务器宕机，这时需要将该节点从集群中摘除，那么，之前存储在 C1 上的 F1，将会顺时针寻找距离它最近的一个节点，即 C2 节点，这样，F1 就会存储到 C2 上</p>
+<p><img lazyload="" src="/images/loading.svg" data-src="/../img/DistributedSystems/%E4%B8%80%E8%87%B4%E6%80%A7-Hash-%E7%AE%97%E6%B3%95/hashCircle3.png" alt="hashcircle"></p>
+<p>摘除 C1 节点之后，只影响到原先存储在 C1 上的 F1，而 F2、F3、F4 都没有受到影响，这解决了 Hash 算法 (Hash(Oobject) % N) 中可能带来的雪崩问题</p>
+<h3 id="增加节点"><a href="#增加节点" class="headerlink" title="增加节点"></a>增加节点</h3><p>新增 C4 节点之后，原先存储到 C3 的 F3，迁移到了 C4，分担了 C3 上的存储压力和流量压力</p>
+
+  <div class="note-large default">
+    <div class="notel-title rounded-t-lg p-3 font-bold text-lg flex flex-row gap-2 items-center">
+      <p>Note</p>
+
+    </div>
+    <div class="notel-content">
+      <p>同样，新增 C4 节点之后，只影响到原先存储在 C3 上的 F3，而 F1、F2、F3 都没有受到影响，这解决了 Hash 算法 (Hash(Oobject) % N) 中可能带来的雪崩问题</p>
+
+    </div>
+  </div>
+
+<p><img lazyload="" src="/images/loading.svg" data-src="/../img/DistributedSystems/%E4%B8%80%E8%87%B4%E6%80%A7-Hash-%E7%AE%97%E6%B3%95/hashCircle4.png" alt="hashcircle"></p>
+<h3 id="Hash-偏斜和不平衡问题"><a href="#Hash-偏斜和不平衡问题" class="headerlink" title="Hash 偏斜和不平衡问题"></a>Hash 偏斜和不平衡问题</h3><p>目前的一致性 Hash 算法在某些情况下存在以下问题</p>
+<ol>
+<li><p>假设节点 C2 宕机，那么将该节点摘除之后，之前在 C2 上的 F2 就要迁移到 C3 上，这时带来了两部分压力:</p>
+<ul>
+<li>之前请求到 C2 上的流量转移到 C3 上，这会导致 C3 的流量增加，如果之前 C2 上存在热点数据，则可能导致 C3 压力过载</li>
+<li>之前存储到 C2 上的文件转移到了 C3，会导致 C3 的内容占用量增加，可能存在瓶颈</li>
+</ul>
+<p><img lazyload="" src="/images/loading.svg" data-src="/../img/DistributedSystems/%E4%B8%80%E8%87%B4%E6%80%A7-Hash-%E7%AE%97%E6%B3%95/hashCircle5.png" alt="hashcircle"></p>
+<p>当上面两个压力发生时，可能又会导致 C3 节点宕机，那么压力便会传递到 C1 上，那么会出现滚雪球的情况，服务压力出现了雪崩，导致整个服务不可用。这一点违背了判定哈希算法优劣的四个原则中的<strong>平衡性</strong>， 节点宕机后，流量及内存的分配方式打破了原有的平衡。</p>
+</li>
+<li><p>服务器可能无法均匀映射到环形 Hash 空间上，这会导致缓存分布不均匀，多数服务器没有被充分利用，如果缓存数据较多的服务器出现故障，由于大量缓存失效，会导致整个服务不可用。</p>
+<p><img lazyload="" src="/images/loading.svg" data-src="/../img/DistributedSystems/%E4%B8%80%E8%87%B4%E6%80%A7-Hash-%E7%AE%97%E6%B3%95/hashCircle6.png" alt="hashcircle"></p>
+</li>
+</ol>
+<h3 id="虚拟节点"><a href="#虚拟节点" class="headerlink" title="虚拟节点"></a>虚拟节点</h3><p>虚拟节点 (virtual node) 是实际节点 (机器) 在 Hash 空间的复制品 (replica)，一个实际节点对应若干虚拟节点。</p>
+<ol>
+<li><p>Hash 偏斜</p>
+<p>虚拟节点的作用等同于增加服务器数量，让服务器更加均匀地映射到环形 Hash 空间上，这样文件被均匀缓存的概率就越大，这就解决了 Hash 偏斜的问题。</p>
+</li>
+</ol>
+<p><img lazyload="" src="/images/loading.svg" data-src="/../img/DistributedSystems/%E4%B8%80%E8%87%B4%E6%80%A7-Hash-%E7%AE%97%E6%B3%95/hashCircle7.png" alt="hashcircle"></p>
+<ol start="2">
+<li><p>不平衡问题</p>
+<p>当某个节点宕机后，存储及流量压力并没有全部转移到某台机器上，而是分散到了多台节点上，这就解决了不平衡问题和节点宕机可能存在的雪崩问题，当物理节点越多，虚拟节点越多时，雪崩的可能性就越小。</p>
+<p><img lazyload="" src="/images/loading.svg" data-src="/../img/DistributedSystems/%E4%B8%80%E8%87%B4%E6%80%A7-Hash-%E7%AE%97%E6%B3%95/hashCircle8.png" alt="hashcircle"></p>
+</li>
+</ol>
+]]></content>
+      <categories>
+        <category>Distributed Systems</category>
+      </categories>
+      <tags>
+        <tag>Distributed Systems</tag>
+        <tag>Algorithm</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>分布式系统理论基础</title>
+    <url>/2024/01/19/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E7%90%86%E8%AE%BA%E5%9F%BA%E7%A1%80/</url>
     <content><![CDATA[<h2 id="Overview"><a href="#Overview" class="headerlink" title="Overview"></a>Overview</h2><h3 id="What-is-a-Distributed-System"><a href="#What-is-a-Distributed-System" class="headerlink" title="What is a Distributed System?"></a>What is a Distributed System?</h3><p>分布式系统是一个硬件或软件组件分布在不同网络计算机上，彼此之间通过消息传递进行通信和协调的系统。即<strong>一群独立计算机集合共同对外提供服务，给系统用户仅有一台计算机在提供服务的感知</strong>。</p>
 <p>分布式意味着可以采用更多的普通计算机（相对于昂贵的大型机）组成分布式集群对外提供服务。计算机越多，CPU、内存、存储资源等也就越多，能够处理的并发访问量也就越大。</p>
 <p>由于各个主机之间通信和协调主要通过网络进行，分布式系统中的计算机在空间上几乎没有任何限制，对于大型网站各个主机甚至可能分布在不同的国家和地区。</p>
 <h3 id="分布式系统的主要特征"><a href="#分布式系统的主要特征" class="headerlink" title="分布式系统的主要特征"></a>分布式系统的主要特征</h3><ul>
 <li><p><strong>分布性:</strong> 分布式系统中的多台计算机之间在空间位置上可以随意分布。</p>
 </li>
-<li><p><strong>对等性:</strong>  分布式系统中的计算机没有主／从之分，即没有控制整个系统的主机，也没有被控制的从机，组成分布式系统的所有计算机节点都是对等的。</p>
-<!-- 副本（Replica）是分布式系统常见概念之一，是分布式系统对数据和服务提供的一种冗余方式。在常见的分布式系统中，为了对外提供高可用的服务，往往会对数据和服务进行副本处理。数据副本是指在不同节点上持久化同一份数据，当某一个节点上存储的数据丢失时，可以从副本读取该数据，这是解决分布式系统数据丢失问题最为有效的手段。另一类副本是服务副本，指多个节点提供同样的服务，每个节点都有能力接收来自外部的请求并进行相应的处理。-->
+<li><p><strong>对等性:</strong>  分布式系统中的计算机没有主／从之分，即没有控制整个系统的主机，也没有被控制的从机，组成分布式系统的所有计算机节点都是对等的，所以分布式系统可以通过副本来避免单点故障。 </p>
+
+  <div class="note-large default">
+    <div class="notel-title rounded-t-lg p-3 font-bold text-lg flex flex-row gap-2 items-center">
+      <p>Note</p>
+
+    </div>
+    <div class="notel-content">
+      <p>副本（Replica）是分布式系统常见概念之一，是分布式系统对数据和服务提供的一种冗余方式。在常见的分布式系统中，为了对外提供高可用的服务，往往会对数据和服务进行副本处理。数据副本是指在不同节点上持久化同一份数据，当某一个节点上存储的数据丢失时，可以从副本读取该数据，这是解决分布式系统数据丢失问题最为有效的手段。另一类副本是服务副本，指多个节点提供同样的服务，每个节点都有能力接收来自外部的请求并进行相应的处理。</p>
+
+    </div>
+  </div>
 </li>
-<li><p><strong>自治性:</strong> 分布式系统中的各个节点都包含自己的处理机和内存，各自具有独立的处理数据的功能，彼此无主次之分，既能自治地进行工作，又能利用共享的通信线路来传送信息，协调任务处理。</p>
+<li><p><strong>自治性:</strong> 分布式系统中的各个节点都包含自己的处理机和内存，各自具有独立的处理数据的功能，既能自治地进行工作，又能利用共享的通信线路来传送信息，协调任务处理。</p>
 </li>
-<li><p><strong>并发性:</strong> 在一个计算机网络中，同一个分布式系统中的多个节点在程序运行过程，可能会并发操作一些共享资源。</p>
+<li><p><strong>并发性:</strong> 分布式系统中的多个节点在程序运行过程，可以并发操作一些共享资源或并发执行任务。</p>
 </li>
 </ul>
 <h3 id="分布式系统面临的问题"><a href="#分布式系统面临的问题" class="headerlink" title="分布式系统面临的问题"></a>分布式系统面临的问题</h3><ul>
-<li><p><strong>机器宕机</strong></p>
+<li><p><strong>节点故障:</strong> 指组成分布式系统的服务器节点出现的宕机或“僵死”现象。</p>
 </li>
 <li><p><strong>网络异常</strong></p>
 <ul>
-<li><strong>消息丢失:</strong> 节点彼此之间完全无法通信，即出现了“网络分化”。</li>
-<li><strong>消息乱序:</strong> 节点通信过程中有一定概率不是按照发送时的顺序依次到达目的节点，考虑使用序列号等机制处理网络消息的乱序问题，使得无效的、过期的网络消息不影响系统的正确性。</li>
-<li><strong>数据错误:</strong> TCP 协议为应用层提供了可靠的、面向连接的传输服务，但在分布式系统的协议设计中不能认为所有基于 TCP 协议的网络通信都是可靠的。TCP协议只能保证同一个 TCP 链接内的网络消息不乱序，TCP 链接之间的网络消息顺序则无法保证。</li>
+<li><p><strong>消息丢失:</strong> 节点彼此之间完全无法通信，即出现<strong>网络分区</strong>。</p>
+
+  <div class="note-large default">
+    <div class="notel-title rounded-t-lg p-3 font-bold text-lg flex flex-row gap-2 items-center">
+      <p>网络分区定义</p>
+
+    </div>
+    <div class="notel-content">
+      <p>在分布式集群中，节点之间由于网络不通，导致集群中节点形成不同的子集，子集中节点之间网络互通，而子集与子集之间网络不通。
+  </p>
+
+    </div>
+  </div>
+</li>
+<li><p><strong>消息乱序:</strong> 节点通信过程中有一定概率不是按照发送时的顺序依次到达目的节点，考虑使用序列号等机制处理网络消息的乱序问题，使得无效的、过期的网络消息不影响系统的正确性。</p>
+</li>
+<li><p><strong>数据错误:</strong> TCP 协议为应用层提供了可靠的、面向连接的传输服务，但在分布式系统的协议设计中不能认为所有基于 TCP 协议的网络通信都是可靠的。TCP协议只能保证同一个 TCP 链接内的网络消息不乱序，TCP 链接之间的网络消息顺序则无法保证。</p>
+</li>
 </ul>
 </li>
 <li><p><strong>缺乏全局时钟:</strong> 在分布式系统中，由于系统缺乏一个全局的时钟序列控制，难以确定事件的先后顺序。</p>
 </li>
 <li><p><strong>分布式三态:</strong> 如果某个节点向另一个节点发起 <strong>RPC(Remote procedure call)</strong> 调用，即某个节点 A 向另一个节点 B 发送消息，节点 B 根据收到消息的内容完成某些操作，并将操作的结果通过另一个消息返回给节点 A，那么这个RPC 执行的结果有三种状态：<strong>“成功”</strong>、<strong>“失败”</strong>、<strong>“超时 (未知)”</strong>，称之为分布式系统的三态。</p>
+<p>在传统的单机系统中，应用程序在调用一个函数后，能够得到一个明确响应：成功或失败。而在分布式系统中，当网络出现异常时，可能会出现超时现象，通常有以下两种情况：</p>
+<ul>
+<li>由于网络原因，该请求（消息）并没有被成功发送到接收方，而是在发送过程就发生了消息丢失现象。</li>
+<li>该请求（消息）成功被接收方接收并进行了处理后，在将响应反馈给发送方的过程中，发生了消息丢失现象。</li>
+</ul>
 </li>
 <li><p><strong>存储数据丢失:</strong> 对于有状态节点来说，数据丢失意味着状态丢失，通常只能从其他节点读取、恢复存储状态。</p>
 </li>
@@ -49,10 +172,21 @@
 <li><p><strong>一致性:</strong> 分布式系统为了提高可用性，不可避免会使用副本机制，从而引发副本一致性问题。</p>
 </li>
 </ul>
-<h2 id="Fundamental-Theory"><a href="#Fundamental-Theory" class="headerlink" title="Fundamental Theory"></a>Fundamental Theory</h2><h3 id="CAP-theorem"><a href="#CAP-theorem" class="headerlink" title="CAP theorem"></a>CAP theorem</h3><ul>
+<h2 id="Fundamental-Theory"><a href="#Fundamental-Theory" class="headerlink" title="Fundamental Theory"></a>Fundamental Theory</h2><h3 id="CAP-theorem"><a href="#CAP-theorem" class="headerlink" title="CAP theorem"></a>CAP theorem</h3><p>又称布鲁尔定理 (Brewer’s theorem)，指出对于一个分布式计算系统来说，不可能同时满足以下三点：</p>
+<ul>
 <li><strong>Consistency (一致性):</strong> <em>Every read receives the most recent write or an error.</em></li>
 <li><strong>Availability (可用性):</strong> <em>Every request receives a (non-error) response, without guaranteeing it contains the most recent write.</em></li>
-<li><strong>Partition Tolerance (分区容错):</strong> <em>The system continues to operate despite an arbitrary number of messages being dropped (or delayed) by the network between nodes.</em>  <!-- 大多数分布式系统分布在多个子网络，每个子网络就叫做一个区（partition），分区容错指的是当区间通信失败时系统仍能正常工作 --></li>
+<li><strong>Partition Tolerance (分区容错):</strong> <em>The system continues to operate despite an arbitrary number of messages being dropped (or delayed) by the network between nodes.</em>  
+  <div class="note-large default">
+    <div class="notel-title rounded-t-lg p-3 font-bold text-lg flex flex-row gap-2 items-center">
+      <p>Note</p>
+
+    </div>
+    <div class="notel-content">
+      <p>大多数分布式系统分布在多个子网络，每个子网络叫做一个区 (partition)，分区容错指的是当部分区间通信失败时系统仍能正常工作</p>
+
+    </div>
+  </div></li>
 </ul>
 <p><img  
                      lazyload
@@ -61,9 +195,9 @@
                       alt="CAP Theorem Diagram"
                 ></p>
 <h3 id="BASE"><a href="#BASE" class="headerlink" title="BASE"></a>BASE</h3><ul>
-<li><strong>Basically Available (基本可用):</strong> 分布式系统在出现不可预知故障的时候，允许损失部分可用性。</li>
-<li><strong>Soft State (软状态):</strong> 又称弱状态，指允许系统中的数据存在中间状态，并认为该中间状态的存在不会影响系统的整体可用性，即允许系统在不同节点的数据副本之间进行数据同步的过程存在延时。</li>
-<li><strong>Eventually Consistent (最终一致性):</strong> 强调系统中所有的数据副本，在经过一段时间的同步后，最终能够达到一致，即无需实时保证系统数据的强一致性。</li>
+<li><strong>Basically Available (基本可用):</strong> 分布式系统在出现不可预知故障的时候，允许损失部分可用性，确保系统能够基本运行、一直提供服务。</li>
+<li><strong>Soft State (软状态):</strong> 允许系统中的数据存在中间状态，并认为该中间状态的存在不会影响系统的整体可用性，即允许系统在不同节点的数据副本之间进行数据同步的过程存在延时，无需实时保证系统数据的强一致性。</li>
+<li><strong>Eventually Consistent (最终一致性):</strong> 强调系统中所有的数据副本，在经过一段时间的同步后，最终能够达到一致。</li>
 </ul>
 ]]></content>
       <categories>
